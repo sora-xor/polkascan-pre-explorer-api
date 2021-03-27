@@ -32,7 +32,7 @@ from app import settings
 from app.models.data import Block, Extrinsic, Event, RuntimeCall, RuntimeEvent, Runtime, RuntimeModule, \
     RuntimeCallParam, RuntimeEventAttribute, RuntimeType, RuntimeStorage, Account, Session, Contract, \
     BlockTotal, SessionValidator, Log, AccountIndex, RuntimeConstant, SessionNominator, \
-    RuntimeErrorMessage, SearchIndex, AccountInfoSnapshot
+    RuntimeErrorMessage, SearchIndex, AccountInfoSnapshot, DataAsset
 from app.resources.base import JSONAPIResource, JSONAPIListResource, JSONAPIDetailResource, BaseResource
 from app.utils.ss58 import ss58_decode, ss58_encode
 from scalecodec.base import RuntimeConfiguration
@@ -253,6 +253,10 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
                     if param['type'] == 'Box<Call>':
                         param['value']['call_args'] = self.check_params(param['value']['call_args'], identifier)
 
+                    elif param['type'] == 'AssetId':
+                        currency_data = DataAsset.query(self.session).filter(DataAsset.asset_id == param['value']).first()
+                        param['currency'] = currency_data.symbol
+
                     elif type(param['value']) is str and len(param['value']) > 200000:
                         param['value'] = "{}/{}".format(
                             identifier,
@@ -276,7 +280,8 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
 
         block = Block.query(self.session).get(item.block_id)
 
-        data['attributes']['datetime'] = block.datetime.replace(tzinfo=pytz.UTC).isoformat()
+        if block.datetime:
+            data['attributes']['datetime'] = block.datetime.replace(tzinfo=pytz.UTC).isoformat()
 
         if item.account:
             data['attributes']['account'] = item.account.serialize()
@@ -459,7 +464,7 @@ class BalanceTransferListResource(JSONAPIListResource):
 
     def get_query(self):
         return Event.query(self.session).filter(
-            Event.module_id == 'balances', Event.event_id == 'Transfer'
+            Event.module_id == 'assets', Event.event_id == 'Transfer'
         ).order_by(Event.block_id.desc())
 
     def apply_filters(self, query, params):
@@ -521,13 +526,20 @@ class BalanceTransferListResource(JSONAPIListResource):
                         'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                     }
                 }
-            # Some networks don't have fees
-            if len(item.attributes) == 4:
-                fee = item.attributes[3]['value']
-            else:
-                fee = 0
 
-            value = item.attributes[2]['value']
+            currency_id = item.attributes[2]['value']
+            currency_data = DataAsset.query(self.session).filter(DataAsset.asset_id == currency_id).first()
+            if currency_data:
+                currency = currency_data.symbol
+            else:
+                currency = ''
+            # Some networks don't have fees
+            #if len(item.attributes) == 4:
+            #    fee = item.attributes[3]['value']
+           # else:
+            fee = 0
+
+            value = item.attributes[3]['value']
         elif item.event_id == 'Claimed':
 
             fee = 0
@@ -563,7 +575,9 @@ class BalanceTransferListResource(JSONAPIListResource):
                 'sender': sender_data,
                 'destination': destination_data,
                 'value': value,
-                'fee': fee
+                'fee': fee,
+                'currency': currency,
+                'assetId': currency_id
             }
         }
 
@@ -603,11 +617,17 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
                 }
             }
 
-        # Some networks don't have fees
-        if len(item.attributes) == 4:
-            fee = item.attributes[3]['value']
+        currency_id = item.attributes[2]['value']
+        currency_data = DataAsset.query(self.session).filter(DataAsset.asset_id == currency_id).first()
+        if currency_data:
+            currency = currency_data.symbol
         else:
-            fee = 0
+            currency = ''
+        # Some networks don't have fees
+        #if len(item.attributes) == 4:
+        #    fee = item.attributes[3]['value']
+        # else:
+        fee = 0
 
         return {
             'type': 'balancetransfer',
@@ -617,8 +637,10 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
                 'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
                 'sender': sender_data,
                 'destination': destination_data,
-                'value': item.attributes[2]['value'],
-                'fee': fee
+                'value': item.attributes[3]['value'],
+                'fee': fee,
+                'currency': currency,
+                'asset_id': currency_id
             }
         }
 
