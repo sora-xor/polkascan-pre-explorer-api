@@ -255,7 +255,8 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
 
                     elif param['type'] == 'AssetId':
                         currency_data = DataAsset.query(self.session).filter(DataAsset.asset_id == param['value']).first()
-                        param['currency'] = currency_data.symbol
+                        if currency_data:
+                            param['currency'] = currency_data.symbol
 
                     elif type(param['value']) is str and len(param['value']) > 200000:
                         param['value'] = "{}/{}".format(
