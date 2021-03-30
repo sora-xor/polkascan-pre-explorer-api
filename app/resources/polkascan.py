@@ -534,11 +534,6 @@ class BalanceTransferListResource(JSONAPIListResource):
                 currency = currency_data.symbol
             else:
                 currency = ''
-            # Some networks don't have fees
-            #if len(item.attributes) == 4:
-            #    fee = item.attributes[3]['value']
-           # else:
-            fee = 0
 
             value = item.attributes[3]['value']
         elif item.event_id == 'Claimed':
@@ -565,6 +560,12 @@ class BalanceTransferListResource(JSONAPIListResource):
             fee = 0
             destination_data = {}
             value = None
+
+        fee_event = Event.query(self.session).filter(Event.module_id=='xorfee', Event.event_id=='FeeWithdrawn', Event.block_id==item.block_id, Event.extrinsic_idx==item.extrinsic_idx).first()
+        if fee_event:
+            fee = fee_event.attributes[1]['value']
+        else:
+            fee = 0
 
         return {
             'type': 'balancetransfer',
@@ -624,11 +625,12 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
             currency = currency_data.symbol
         else:
             currency = ''
-        # Some networks don't have fees
-        #if len(item.attributes) == 4:
-        #    fee = item.attributes[3]['value']
-        # else:
-        fee = 0
+
+        fee_event = Event.query(self.session).filter(Event.module_id=='xorfee', Event.event_id=='FeeWithdrawn', Event.block_id==item.block_id, Event.extrinsic_idx==item.extrinsic_idx).first()
+        if fee_event:
+            fee = fee_event.attributes[1]['value']
+        else:
+            fee = 0
 
         return {
             'type': 'balancetransfer',
@@ -740,7 +742,7 @@ class AccountDetailResource(JSONAPIDetailResource):
 
         # Get balance history
         account_info_snapshot = AccountInfoSnapshot.query(self.session).filter_by(
-                account_id=item.id
+            account_id=item.id
         ).order_by(AccountInfoSnapshot.block_id.desc())[:1000]
 
         data['attributes']['balance_history'] = [
