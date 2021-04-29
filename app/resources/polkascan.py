@@ -290,6 +290,14 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
         if item.params:
             item.params = self.check_params(item.params, item.serialize_id())
 
+        fee_event = Event.query(self.session).filter(Event.module_id=='xorfee', Event.event_id=='FeeWithdrawn', Event.block_id==item.block_id, Event.extrinsic_idx==item.extrinsic_idx).first()
+        if fee_event:
+            fee = fee_event.attributes[1]['value']
+        else:
+            fee = 0
+
+        data['attributes']['fee'] = fee
+
         if item.error:
             # Retrieve ExtrinsicFailed event
             extrinsic_failed_event = Event.query(self.session).filter_by(
