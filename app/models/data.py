@@ -787,7 +787,7 @@ class SearchIndexType(BaseModel):
     id = sa.Column(sa.Integer(), primary_key=True)
     name = sa.Column(sa.String(64), nullable=False, index=True)
 
-class DataAsset(BaseModel):
+class Asset(BaseModel):
     __tablename__ = 'data_asset'
 
     id = sa.Column(sa.Integer(), primary_key=True, autoincrement=True)
