@@ -32,7 +32,7 @@ from app import settings
 from app.models.data import Block, Extrinsic, Event, RuntimeCall, RuntimeEvent, Runtime, RuntimeModule, \
     RuntimeCallParam, RuntimeEventAttribute, RuntimeType, RuntimeStorage, Account, Session, Contract, \
     BlockTotal, SessionValidator, Log, AccountIndex, RuntimeConstant, SessionNominator, \
-    RuntimeErrorMessage, SearchIndex, AccountInfoSnapshot, DataAsset
+    RuntimeErrorMessage, SearchIndex, AccountInfoSnapshot, Asset
 from app.resources.base import JSONAPIResource, JSONAPIListResource, JSONAPIDetailResource, BaseResource
 from app.utils.ss58 import ss58_decode, ss58_encode
 from scalecodec.base import RuntimeConfiguration
@@ -254,7 +254,7 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
                         param['value']['call_args'] = self.check_params(param['value']['call_args'], identifier)
 
                     elif param['type'] == 'AssetId':
-                        currency_data = DataAsset.query(self.session).filter(DataAsset.asset_id == param['value']).first()
+                        currency_data = Asset.query(self.session).filter(Asset.asset_id == param['value']).first()
                         if currency_data:
                             param['currency'] = currency_data.symbol
 
@@ -383,17 +383,29 @@ class EventDetailResource(JSONAPIDetailResource):
             return None
         return Event.query(self.session).get(item_id.split('-'))
 
-    def serialize_item(self, item):
-        data = item.serialize()
+    def check_attributes(self, attributes):
+        for idx, attribute in enumerate(attributes):
+            if 'value' in attribute and 'type' in attribute:
+                if type(attribute['value']) is list:
+                    attribute['value'] = self.check_attributes(attribute['value'])
+                else:
+                    if attribute['type'] == 'AssetId':
+                        currency_data = Asset.query(self.session).filter(Asset.asset_id == attribute['value']).first()
+                        if currency_data:
+                            attribute['currency'] = currency_data.symbol
 
+        return attributes
+
+    def serialize_item(self, item):
+        if item.attributes:
+            item.attributes = self.check_attributes(item.attributes)
+        data = item.serialize()
         runtime_event = RuntimeEvent.query(self.session).filter_by(
             module_id=item.module_id,
             event_id=item.event_id,
             spec_version=item.spec_version_id
         ).first()
-
         data['attributes']['documentation'] = runtime_event.documentation
-
         return data
 
 
@@ -537,7 +549,7 @@ class BalanceTransferListResource(JSONAPIListResource):
                 }
 
             currency_id = item.attributes[2]['value']
-            currency_data = DataAsset.query(self.session).filter(DataAsset.asset_id == currency_id).first()
+            currency_data = Asset.query(self.session).filter(Asset.asset_id == currency_id).first()
             if currency_data:
                 currency = currency_data.symbol
             else:
@@ -628,7 +640,7 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
             }
 
         currency_id = item.attributes[2]['value']
-        currency_data = DataAsset.query(self.session).filter(DataAsset.asset_id == currency_id).first()
+        currency_data = Asset.query(self.session).filter(Asset.asset_id == currency_id).first()
         if currency_data:
             currency = currency_data.symbol
         else:
@@ -1284,3 +1296,17 @@ class RuntimeConstantDetailResource(JSONAPIDetailResource):
             module_id=module_id,
             name=name
         ).first()
+
+
+class AssetListResource(JSONAPIListResource):
+
+    def get_query(self):
+        return Asset.query(self.session).order_by(
+            Asset.asset_id.asc()
+        )
+
+
+class AssetDetailResource(JSONAPIDetailResource):
+
+    def get_item(self, item_id):
+        return Asset.query(self.session).filter(Asset.asset_id == item_id).first()
