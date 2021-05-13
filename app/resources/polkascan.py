@@ -587,19 +587,26 @@ class BalanceTransferListResource(JSONAPIListResource):
         else:
             fee = 0
 
+        block = Block.query(self.session).filter(Block.id == item.block_id).first()
+        extrinsic = Extrinsic.query(self.session).filter(Extrinsic.block_id == item.block_id, Extrinsic.extrinsic_idx == item.extrinsic_idx).first()
+
         return {
-            'type': 'balancetransfer',
-            'id': '{}-{}'.format(item.block_id, item.event_idx),
-            'attributes': {
-                'block_id': item.block_id,
-                'event_id': item.event_id,
-                'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
-                'sender': sender_data,
-                'destination': destination_data,
-                'value': value,
-                'fee': fee,
-                'currency': currency,
-                'assetId': currency_id
+                'type': 'balancetransfer',
+                'id': '{}-{}'.format(item.block_id, item.event_idx),
+                'attributes': {
+                    'block_id': item.block_id,
+                    'block_hash': block.hash,
+                    'event_id': item.event_id,
+                    'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
+                    'transaction_hash': extrinsic.extrinsic_hash,
+                    "success": extrinsic.success,
+                    'transaction_timestamp': block.datetime.replace(tzinfo=pytz.UTC).isoformat(),
+                    'sender': sender_data,
+                    'destination': destination_data,
+                    'value': value,
+                    'fee': fee,
+                    'currency': currency,
+                    'assetId': currency_id
             }
         }
 
@@ -652,12 +659,19 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
         else:
             fee = 0
 
+        block = Block.query(self.session).filter(Block.id == item.block_id).first()
+        extrinsic = Extrinsic.query(self.session).filter(Extrinsic.block_id == item.block_id, Extrinsic.extrinsic_idx == item.extrinsic_idx).first()
+
         return {
             'type': 'balancetransfer',
             'id': '{}-{}'.format(item.block_id, item.event_idx),
             'attributes': {
                 'block_id': item.block_id,
+                'block_hash': block.hash,
                 'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
+                'transaction_hash': extrinsic.extrinsic_hash,
+                "success": extrinsic.success,
+                'transaction_timestamp': block.datetime.replace(tzinfo=pytz.UTC).isoformat(),
                 'sender': sender_data,
                 'destination': destination_data,
                 'value': item.attributes[3]['value'],
