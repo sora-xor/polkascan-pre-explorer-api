@@ -25,7 +25,7 @@ import falcon
 import pytz
 from dogpile.cache.api import NO_VALUE
 from scalecodec.type_registry import load_type_registry_preset
-from sqlalchemy import func, tuple_, or_
+from sqlalchemy import func, tuple_, or_, and_
 from sqlalchemy.orm import defer, subqueryload, lazyload, lazyload_all
 
 from app import settings
@@ -283,6 +283,7 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
 
         if block.datetime:
             data['attributes']['datetime'] = block.datetime.replace(tzinfo=pytz.UTC).isoformat()
+            data['attributes']['transaction_timestamp'] = block.datetime.replace(tzinfo=pytz.UTC).timestamp()
 
         if item.account:
             data['attributes']['account'] = item.account.serialize()
@@ -600,7 +601,7 @@ class BalanceTransferListResource(JSONAPIListResource):
                     'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
                     'transaction_hash': extrinsic.extrinsic_hash,
                     "success": extrinsic.success,
-                    'transaction_timestamp': block.datetime.replace(tzinfo=pytz.UTC).isoformat(),
+                    'transaction_timestamp': block.datetime.replace(tzinfo=pytz.UTC).timestamp(),
                     'sender': sender_data,
                     'destination': destination_data,
                     'value': value,
@@ -671,7 +672,7 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
                 'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
                 'transaction_hash': extrinsic.extrinsic_hash,
                 "success": extrinsic.success,
-                'transaction_timestamp': block.datetime.replace(tzinfo=pytz.UTC).isoformat(),
+                'transaction_timestamp': block.datetime.replace(tzinfo=pytz.UTC).timestamp(),
                 'sender': sender_data,
                 'destination': destination_data,
                 'value': item.attributes[3]['value'],
@@ -1324,3 +1325,29 @@ class AssetDetailResource(JSONAPIDetailResource):
 
     def get_item(self, item_id):
         return Asset.query(self.session).filter(Asset.asset_id == item_id).first()
+
+
+class EthereumBridgeListResource(JSONAPIListResource):
+    def get_query(self):
+        return Extrinsic.query(self.session).filter(
+            and_(
+                Extrinsic.module_id == 'EthBridge',
+                or_(
+                    Extrinsic.call_id == 'transfer_to_sidechain',
+                    Extrinsic.call_id == 'import_incoming_request'
+                    )
+                )
+            ).order_by(
+                Extrinsic.block_id.desc()
+            )
+
+
+class EthereumBridgeDetailResource(JSONAPIDetailResource):
+    def get_item(self, item_id):
+        if item_id[0:2] == '0x':
+            extrinsic = Extrinsic.query(self.session).filter_by(extrinsic_hash=item_id[2:]).first()
+        else:
+            if len(item_id.split('-')) != 2:
+                return None
+            extrinsic = Extrinsic.query(self.session).get(item_id.split('-'))
+        return extrinsic
