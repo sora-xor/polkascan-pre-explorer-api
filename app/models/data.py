@@ -153,6 +153,8 @@ class Block(BaseModel):
     logs = sa.Column(sa.JSON(), default=None, server_default=None)
     spec_version_id = sa.Column(sa.String(64), nullable=False)
     debug_info = sa.Column(sa.JSON(), default=None, server_default=None)
+    count_bridge_income = sa.Column(sa.Integer(), nullable=False)
+    count_bridge_outcome = sa.Column(sa.Integer(), nullable=False)
 
     @classmethod
     def get_head(cls, session):
@@ -215,6 +217,8 @@ class BlockTotal(BaseModel):
     total_accounts_reaped = sa.Column(sa.Numeric(precision=65, scale=0), nullable=False)
     total_sessions_new = sa.Column(sa.Numeric(precision=65, scale=0), nullable=False)
     total_contracts_new = sa.Column(sa.Numeric(precision=65, scale=0), nullable=False)
+    total_bridge_income = sa.Column(sa.Numeric(precision=65, scale=0), nullable=False)
+    total_bridge_outcome = sa.Column(sa.Numeric(precision=65, scale=0), nullable=False)
 
     def serialize_formatting_hook(self, obj_dict):
 

@@ -142,13 +142,37 @@ class ExtrinsicListResource(JSONAPIListResource):
             Extrinsic.block_id.desc()
         )
 
+    def check_params(self, params):
+        for idx, param in enumerate(params):
+
+            if 'value' in param and 'type' in param:
+                if param['type'] == 'AssetId':
+                    currency_data = Asset.query(self.session).filter(Asset.asset_id == param['value']).first()
+                    if currency_data:
+                        param['currency'] = currency_data.symbol
+        return params
+
     def serialize_item(self, item):
         # Exclude large params from list view
 
-        if self.exclude_params:
+        is_transfer = item.module_id == 'Assets' and item.call_id == 'transfer'
+        if self.exclude_params and not is_transfer:
             data = item.serialize(exclude=['params'])
         else:
             data = item.serialize()
+
+        block = Block.query(self.session).filter(Block.id == item.block_id).first()
+        data['attributes']['block_hash'] = block.hash
+        if block.datetime:
+            data['attributes']['transaction_timestamp'] = block.datetime.replace(tzinfo=pytz.UTC).timestamp()
+        fee_event = Event.query(self.session).filter(Event.module_id=='xorfee', Event.event_id=='FeeWithdrawn', Event.block_id==item.block_id, Event.extrinsic_idx==item.extrinsic_idx).first()
+        if fee_event:
+            fee = fee_event.attributes[1]['value']
+        else:
+            fee = 0
+        data['attributes']['fee'] = fee
+        if is_transfer:
+            self.check_params(item.params)
 
         # Add account as relationship
         if item.account:
@@ -454,7 +478,9 @@ class NetworkStatisticsResource(JSONAPIResource):
                             'total_events_module': int(best_block.total_events_module),
                             'total_blocks': 'N/A',
                             'total_accounts': int(best_block.total_accounts),
-                            'total_runtimes': Runtime.query(self.session).count()
+                            'total_runtimes': Runtime.query(self.session).count(),
+                            'total_bridge_income': int(best_block.total_bridge_income),
+                            'total_bridge_outcome': int(best_block.total_bridge_outcome)
                         }
                     },
                 )
@@ -470,7 +496,9 @@ class NetworkStatisticsResource(JSONAPIResource):
                             'total_events_module': 0,
                             'total_blocks': 'N/A',
                             'total_accounts': 0,
-                            'total_runtimes': 0
+                            'total_runtimes': 0,
+                            'total_bridge_income': 0,
+                            'total_bridge_outcome': 0
                         }
                     },
                 )
@@ -1327,19 +1355,25 @@ class AssetDetailResource(JSONAPIDetailResource):
         return Asset.query(self.session).filter(Asset.asset_id == item_id).first()
 
 
-class EthereumBridgeListResource(JSONAPIListResource):
+class SORAToEthereumBridgeListResource(JSONAPIListResource):
     def get_query(self):
         return Extrinsic.query(self.session).filter(
             and_(
                 Extrinsic.module_id == 'EthBridge',
-                or_(
-                    Extrinsic.call_id == 'transfer_to_sidechain',
-                    Extrinsic.call_id == 'import_incoming_request'
-                    )
+                Extrinsic.call_id == 'transfer_to_sidechain'
                 )
-            ).order_by(
-                Extrinsic.block_id.desc()
-            )
+            ).order_by(Extrinsic.block_id.desc())
+
+
+class EthereumToSORABridgeListResource(JSONAPIListResource):
+    def get_query(self):
+
+        return Extrinsic.query(self.session).join(
+            Event,
+            and_(Event.block_id == Extrinsic.block_id, Event.extrinsic_idx == Extrinsic.extrinsic_idx)
+        ).filter(
+            and_(Event.module_id == 'ethbridge', Event.event_id == 'IncomingRequestFinalized')
+        ).order_by(Extrinsic.block_id.desc())
 
 
 class EthereumBridgeDetailResource(JSONAPIDetailResource):
