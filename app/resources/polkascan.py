@@ -1375,13 +1375,3 @@ class EthereumToSORABridgeListResource(JSONAPIListResource):
             and_(Event.module_id == 'ethbridge', Event.event_id == 'IncomingRequestFinalized')
         ).order_by(Extrinsic.block_id.desc())
 
-
-class EthereumBridgeDetailResource(JSONAPIDetailResource):
-    def get_item(self, item_id):
-        if item_id[0:2] == '0x':
-            extrinsic = Extrinsic.query(self.session).filter_by(extrinsic_hash=item_id[2:]).first()
-        else:
-            if len(item_id.split('-')) != 2:
-                return None
-            extrinsic = Extrinsic.query(self.session).get(item_id.split('-'))
-        return extrinsic
