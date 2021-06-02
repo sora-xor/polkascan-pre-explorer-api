@@ -25,7 +25,7 @@ import falcon
 import pytz
 from dogpile.cache.api import NO_VALUE
 from scalecodec.type_registry import load_type_registry_preset
-from sqlalchemy import func, tuple_, or_
+from sqlalchemy import func, tuple_, or_, and_
 from sqlalchemy.orm import defer, subqueryload, lazyload, lazyload_all
 
 from app import settings
@@ -142,13 +142,37 @@ class ExtrinsicListResource(JSONAPIListResource):
             Extrinsic.block_id.desc()
         )
 
+    def check_params(self, params):
+        for idx, param in enumerate(params):
+
+            if 'value' in param and 'type' in param:
+                if param['type'] == 'AssetId':
+                    currency_data = Asset.query(self.session).filter(Asset.asset_id == param['value']).first()
+                    if currency_data:
+                        param['currency'] = currency_data.symbol
+        return params
+
     def serialize_item(self, item):
         # Exclude large params from list view
 
-        if self.exclude_params:
+        is_transfer = item.module_id == 'Assets' and item.call_id == 'transfer'
+        if self.exclude_params and not is_transfer:
             data = item.serialize(exclude=['params'])
         else:
             data = item.serialize()
+
+        block = Block.query(self.session).filter(Block.id == item.block_id).first()
+        data['attributes']['block_hash'] = block.hash
+        if block.datetime:
+            data['attributes']['transaction_timestamp'] = block.datetime.replace(tzinfo=pytz.UTC).timestamp()
+        fee_event = Event.query(self.session).filter(Event.module_id=='xorfee', Event.event_id=='FeeWithdrawn', Event.block_id==item.block_id, Event.extrinsic_idx==item.extrinsic_idx).first()
+        if fee_event:
+            fee = fee_event.attributes[1]['value']
+        else:
+            fee = 0
+        data['attributes']['fee'] = fee
+        if is_transfer:
+            self.check_params(item.params)
 
         # Add account as relationship
         if item.account:
@@ -283,6 +307,7 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
 
         if block.datetime:
             data['attributes']['datetime'] = block.datetime.replace(tzinfo=pytz.UTC).isoformat()
+            data['attributes']['transaction_timestamp'] = block.datetime.replace(tzinfo=pytz.UTC).timestamp()
 
         if item.account:
             data['attributes']['account'] = item.account.serialize()
@@ -453,7 +478,9 @@ class NetworkStatisticsResource(JSONAPIResource):
                             'total_events_module': int(best_block.total_events_module),
                             'total_blocks': 'N/A',
                             'total_accounts': int(best_block.total_accounts),
-                            'total_runtimes': Runtime.query(self.session).count()
+                            'total_runtimes': Runtime.query(self.session).count(),
+                            'total_bridge_income': int(best_block.total_bridge_income),
+                            'total_bridge_outcome': int(best_block.total_bridge_outcome)
                         }
                     },
                 )
@@ -469,7 +496,9 @@ class NetworkStatisticsResource(JSONAPIResource):
                             'total_events_module': 0,
                             'total_blocks': 'N/A',
                             'total_accounts': 0,
-                            'total_runtimes': 0
+                            'total_runtimes': 0,
+                            'total_bridge_income': 0,
+                            'total_bridge_outcome': 0
                         }
                     },
                 )
@@ -587,19 +616,26 @@ class BalanceTransferListResource(JSONAPIListResource):
         else:
             fee = 0
 
+        block = Block.query(self.session).filter(Block.id == item.block_id).first()
+        extrinsic = Extrinsic.query(self.session).filter(Extrinsic.block_id == item.block_id, Extrinsic.extrinsic_idx == item.extrinsic_idx).first()
+
         return {
-            'type': 'balancetransfer',
-            'id': '{}-{}'.format(item.block_id, item.event_idx),
-            'attributes': {
-                'block_id': item.block_id,
-                'event_id': item.event_id,
-                'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
-                'sender': sender_data,
-                'destination': destination_data,
-                'value': value,
-                'fee': fee,
-                'currency': currency,
-                'assetId': currency_id
+                'type': 'balancetransfer',
+                'id': '{}-{}'.format(item.block_id, item.event_idx),
+                'attributes': {
+                    'block_id': item.block_id,
+                    'block_hash': block.hash,
+                    'event_id': item.event_id,
+                    'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
+                    'transaction_hash': extrinsic.extrinsic_hash,
+                    "success": extrinsic.success,
+                    'transaction_timestamp': block.datetime.replace(tzinfo=pytz.UTC).timestamp(),
+                    'sender': sender_data,
+                    'destination': destination_data,
+                    'value': value,
+                    'fee': fee,
+                    'currency': currency,
+                    'assetId': currency_id
             }
         }
 
@@ -652,12 +688,19 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
         else:
             fee = 0
 
+        block = Block.query(self.session).filter(Block.id == item.block_id).first()
+        extrinsic = Extrinsic.query(self.session).filter(Extrinsic.block_id == item.block_id, Extrinsic.extrinsic_idx == item.extrinsic_idx).first()
+
         return {
             'type': 'balancetransfer',
             'id': '{}-{}'.format(item.block_id, item.event_idx),
             'attributes': {
                 'block_id': item.block_id,
+                'block_hash': block.hash,
                 'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
+                'transaction_hash': extrinsic.extrinsic_hash,
+                "success": extrinsic.success,
+                'transaction_timestamp': block.datetime.replace(tzinfo=pytz.UTC).timestamp(),
                 'sender': sender_data,
                 'destination': destination_data,
                 'value': item.attributes[3]['value'],
@@ -1310,3 +1353,25 @@ class AssetDetailResource(JSONAPIDetailResource):
 
     def get_item(self, item_id):
         return Asset.query(self.session).filter(Asset.asset_id == item_id).first()
+
+
+class SORAToEthereumBridgeListResource(JSONAPIListResource):
+    def get_query(self):
+        return Extrinsic.query(self.session).filter(
+            and_(
+                Extrinsic.module_id == 'EthBridge',
+                Extrinsic.call_id == 'transfer_to_sidechain'
+                )
+            ).order_by(Extrinsic.block_id.desc())
+
+
+class EthereumToSORABridgeListResource(JSONAPIListResource):
+    def get_query(self):
+
+        return Extrinsic.query(self.session).join(
+            Event,
+            and_(Event.block_id == Extrinsic.block_id, Event.extrinsic_idx == Extrinsic.extrinsic_idx)
+        ).filter(
+            and_(Event.module_id == 'ethbridge', Event.event_id == 'IncomingRequestFinalized')
+        ).order_by(Extrinsic.block_id.desc())
+
