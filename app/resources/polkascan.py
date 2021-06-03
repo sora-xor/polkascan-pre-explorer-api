@@ -233,6 +233,14 @@ class ExtrinsicListResource(JSONAPIListResource):
 
                 query = query.filter_by(address=account_id)
 
+            if params.get('filter[error]'):
+
+                query = query.filter_by(error=params.get('filter[error]'))
+
+            if params.get('filter[success]'):
+
+                query = query.filter_by(success=params.get('filter[success]'))
+
         return query
 
 
