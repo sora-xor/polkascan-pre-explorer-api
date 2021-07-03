@@ -1126,7 +1126,7 @@ class RuntimeCallListResource(JSONAPIListResource):
 
         if params.get('filter[latestRuntime]'):
 
-            latest_runtime = Runtime.query(self.session).order_by(Runtime.spec_version.desc()).first()
+            latest_runtime = Runtime.query(self.session).order_by(Runtime.id.desc()).first()
 
             query = query.filter_by(spec_version=latest_runtime.spec_version)
 
@@ -1181,7 +1181,7 @@ class RuntimeEventListResource(JSONAPIListResource):
 
         if params.get('filter[latestRuntime]'):
 
-            latest_runtime = Runtime.query(self.session).order_by(Runtime.spec_version.desc()).first()
+            latest_runtime = Runtime.query(self.session).order_by(Runtime.id.desc()).first()
 
             query = query.filter_by(spec_version=latest_runtime.spec_version)
 
@@ -1241,7 +1241,7 @@ class RuntimeTypeListResource(JSONAPIListResource):
 
         if params.get('filter[latestRuntime]'):
 
-            latest_runtime = Runtime.query(self.session).order_by(Runtime.spec_version.desc()).first()
+            latest_runtime = Runtime.query(self.session).order_by(Runtime.id.desc()).first()
 
             query = query.filter_by(spec_version=latest_runtime.spec_version)
 
@@ -1261,7 +1261,7 @@ class RuntimeModuleListResource(JSONAPIListResource):
 
         if params.get('filter[latestRuntime]'):
 
-            latest_runtime = Runtime.query(self.session).order_by(Runtime.spec_version.desc()).first()
+            latest_runtime = Runtime.query(self.session).order_by(Runtime.id.desc()).first()
 
             query = query.filter_by(spec_version=latest_runtime.spec_version)
 
