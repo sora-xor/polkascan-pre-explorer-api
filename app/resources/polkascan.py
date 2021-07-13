@@ -32,7 +32,7 @@ from app import settings
 from app.models.data import Block, Extrinsic, Event, RuntimeCall, RuntimeEvent, Runtime, RuntimeModule, \
     RuntimeCallParam, RuntimeEventAttribute, RuntimeType, RuntimeStorage, Account, Session, Contract, \
     BlockTotal, SessionValidator, Log, AccountIndex, RuntimeConstant, SessionNominator, \
-    RuntimeErrorMessage, SearchIndex, AccountInfoSnapshot, Asset
+    RuntimeErrorMessage, SearchIndex, AccountInfoSnapshot, Asset, AssetBalance
 from app.resources.base import JSONAPIResource, JSONAPIListResource, JSONAPIDetailResource, BaseResource
 from app.utils.ss58 import ss58_decode, ss58_encode
 from scalecodec.base import RuntimeConfiguration
@@ -1361,6 +1361,16 @@ class AssetDetailResource(JSONAPIDetailResource):
 
     def get_item(self, item_id):
         return Asset.query(self.session).filter(Asset.asset_id == item_id).first()
+
+    def get_relationships(self, include_list, item):
+        relationships = {}
+        if "accounts" in include_list:
+            relationships["accounts"] = (
+                AssetBalance.query(self.session)
+                .filter_by(asset_id=item.id)
+                .order_by(AssetBalance.balance_free.desc())
+            )
+        return relationships
 
 
 class SORAToEthereumBridgeListResource(JSONAPIListResource):
