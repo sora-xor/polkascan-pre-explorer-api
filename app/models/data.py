@@ -820,4 +820,11 @@ class AssetBalance(BaseModel):
     account = relationship(Account, backref="assets", cascade="all, delete")
 
     def serialize_id(self):
-        return '{}-{}'.format(self.asset_id, self.account_id)
+        return "{}-{}".format(self.asset_id, self.account_id)
+
+    def serialize_formatting_hook(self, obj_dict):
+        obj_dict["attributes"]["address"] = ss58_encode(
+            self.account_id, SUBSTRATE_ADDRESS_TYPE
+        )
+        obj_dict["attributes"]["balance_free_int"] = int(self.balance_free)
+        return obj_dict
