@@ -80,6 +80,13 @@ class Account(BaseModel):
     def serialize_id(self):
         return self.id
 
+    def serialize_formatting_hook(self, obj_dict):
+        """Lossless balance value"""
+        obj_dict["attributes"]["balance_free_int"] = self.balance_free and int(
+            self.balance_free * 10 ** 18
+        )
+        return obj_dict
+
 
 class AccountAudit(BaseModel):
     __tablename__ = 'data_account_audit'
