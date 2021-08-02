@@ -1365,11 +1365,16 @@ class AssetDetailResource(JSONAPIDetailResource):
     def get_relationships(self, include_list, item):
         relationships = {}
         if "accounts" in include_list:
-            relationships["accounts"] = (
-                AssetBalance.query(self.session)
-                .filter_by(asset_id=item.id)
-                .order_by(AssetBalance.balance_free.desc())
-            )
+            if item.asset_id == "0x02" + "0" * 62:
+                relationships["accounts"] = Account.query(self.session).order_by(
+                    Account.balance_free.desc()
+                )
+            else:
+                relationships["accounts"] = (
+                    AssetBalance.query(self.session)
+                    .filter_by(asset_id=item.id)
+                    .order_by(AssetBalance.balance_free.desc())
+                )
         return relationships
 
 
