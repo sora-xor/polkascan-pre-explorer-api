@@ -82,9 +82,7 @@ class Account(BaseModel):
 
     def serialize_formatting_hook(self, obj_dict):
         """Lossless balance value"""
-        obj_dict["attributes"]["balance_free_int"] = self.balance_free and int(
-            self.balance_free * 10 ** 18
-        )
+        obj_dict["attributes"]["balance_free_int"] = self.balance_free and int(self.balance_free)
         return obj_dict
 
 
