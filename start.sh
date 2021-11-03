@@ -1,14 +1,15 @@
 #! /usr/bin/env sh
+LOG="$(date "+[%Y-%m-%d %T %z] [entrypoint] [INFO]")"
 
 if [ -z $ENVIRONMENT ] || [ "$ENVIRONMENT" = "dev" ]; then
     ENVIRONMENT="dev"
 fi
 
-echo "==========================="
-echo "Environment: $ENVIRONMENT"
-echo "==========================="
+echo "$LOG ==========================="
+echo "$LOG Environment: $ENVIRONMENT"
+echo "$LOG ==========================="
 
-echo "Running gunicorn..."
+echo "$LOG Running gunicorn..."
 
 if [ "$ENVIRONMENT" = "dev" ]; then
     # Expand path to local versions of packages
