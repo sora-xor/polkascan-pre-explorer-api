@@ -150,6 +150,7 @@ class ExtrinsicListResource(JSONAPIListResource):
                     currency_data = Asset.query(self.session).filter(Asset.asset_id == param['value']).first()
                     if currency_data:
                         param['currency'] = currency_data.symbol
+                        param['precision'] = currency_data.precision
         return params
 
     def serialize_item(self, item):
@@ -289,6 +290,7 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
                         currency_data = Asset.query(self.session).filter(Asset.asset_id == param['value']).first()
                         if currency_data:
                             param['currency'] = currency_data.symbol
+                            param['precision'] = currency_data.precision
 
                     elif type(param['value']) is str and len(param['value']) > 200000:
                         param['value'] = "{}/{}".format(
@@ -426,6 +428,7 @@ class EventDetailResource(JSONAPIDetailResource):
                         currency_data = Asset.query(self.session).filter(Asset.asset_id == attribute['value']).first()
                         if currency_data:
                             attribute['currency'] = currency_data.symbol
+                            attribute['precision'] = currency_data.precision
 
         return attributes
 
@@ -589,8 +592,10 @@ class BalanceTransferListResource(JSONAPIListResource):
             currency_data = Asset.query(self.session).filter(Asset.asset_id == currency_id).first()
             if currency_data:
                 currency = currency_data.symbol
+                precision = currency_data.precision
             else:
                 currency = ''
+                precision = 18
 
             value = item.attributes[3]['value']
         elif item.event_id == 'Claimed':
@@ -643,6 +648,7 @@ class BalanceTransferListResource(JSONAPIListResource):
                     'value': value,
                     'fee': fee,
                     'currency': currency,
+                    'precision': precision,
                     'assetId': currency_id
             }
         }
@@ -687,8 +693,10 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
         currency_data = Asset.query(self.session).filter(Asset.asset_id == currency_id).first()
         if currency_data:
             currency = currency_data.symbol
+            precision = currency_data.precision
         else:
             currency = ''
+            precision = 18
 
         fee_event = Event.query(self.session).filter(Event.module_id=='xorfee', Event.event_id=='FeeWithdrawn', Event.block_id==item.block_id, Event.extrinsic_idx==item.extrinsic_idx).first()
         if fee_event:
@@ -714,6 +722,7 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
                 'value': item.attributes[3]['value'],
                 'fee': fee,
                 'currency': currency,
+                'precision': precision,
                 'asset_id': currency_id
             }
         }
